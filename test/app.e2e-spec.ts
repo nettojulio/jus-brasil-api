@@ -187,27 +187,33 @@ describe('AppController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/lawsuit')
         .send({
-          lawsuitNumbers: '0710802-55.2018.8.02.000',
+          lawsuitNumber: '0710802-55.2018.8.02.000',
         })
         .expect(400)
-        .expect({ statusCode: 400, message: 'Invalid Justice Segmentation' });
+        .expect({
+          statusCode: 400,
+          message: 'Falha na tentativa de exibir detalhes do processo.',
+        });
     });
 
     it('Should return status code 400 consulting a big Lawsuit number', async () => {
       return request(app.getHttpServer())
         .post('/lawsuit')
         .send({
-          lawsuitNumbers: '0710802-55.2018.8.02.00011',
+          lawsuitNumber: '0710802-55.2018.8.02.00011',
         })
         .expect(400)
-        .expect({ statusCode: 400, message: 'Invalid Justice Segmentation' });
+        .expect({
+          statusCode: 400,
+          message: 'Falha na tentativa de exibir detalhes do processo.',
+        });
     });
 
     it('Should return status code 400 consulting a wrong Justice Segmentation number', async () => {
       return request(app.getHttpServer())
         .post('/lawsuit')
         .send({
-          lawsuitNumbers: '0710802-55.2018.7.02.0001',
+          lawsuitNumber: '0710802-55.2018.7.02.0001',
         })
         .expect(400)
         .expect({ statusCode: 400, message: 'Invalid Justice Segmentation' });
@@ -217,10 +223,10 @@ describe('AppController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/lawsuit')
         .send({
-          lawsuitNumbers: '0710802-55.2018.8.02.0001',
+          lawsuitNumber: '0710802-55.2018.8.01.0001',
         })
         .expect(400)
-        .expect({ statusCode: 400, message: 'Invalid Justice Segmentation' });
+        .expect({ statusCode: 400, message: 'Invalid State Segmentation' });
     });
 
     it('Should return status code 400 consulting a request without body', async () => {
@@ -235,7 +241,7 @@ describe('AppController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/lawsuits')
         .send({
-          lawsuitNumbers: '0710802-55.2018.8.02.0001',
+          lawsuitNumber: '0710802-55.2018.8.02.0001',
         })
         .expect(404)
         .expect({
