@@ -24,12 +24,26 @@ export class LawsuitService {
   ): Promise<LawsuitResponseDTO> {
     const regex = /[\n\t]/g;
     const spaceRegex = new RegExp(/[\u202F\u00A0]/g);
-    const firstInstanceRawHTML = await gatewayRequest(
+    const firstInstancePromise = gatewayRequest(
       `${urls.showFirstInstanceUrl}?processo.foro=1&processo.numero=${lawsuitNumber}`,
     );
-    const secondInstanceRawHTMLCodes = await gatewayRequest(
+
+    const secondInstancePromise = gatewayRequest(
       `${urls.searchUrl}?cbPesquisa=NUMPROC&dePesquisaNuUnificado=${lawsuitNumber}&dePesquisaNuUnificado=UNIFICADO&tipoNuProcesso=UNIFICADO`,
     );
+
+    const [firstInstanceRawHTML, secondInstanceRawHTMLCodes] =
+      await Promise.all([firstInstancePromise, secondInstancePromise]);
+
+    const secondInstanceLawsuitCodes = await this.extractLawsuitCodes(
+      secondInstanceRawHTMLCodes,
+    );
+
+    const segundaInstancia = await this.secondInstanceParse(
+      secondInstanceLawsuitCodes,
+      `${urls.showSecondInstanceUrl}?processo.codigo`,
+    );
+
     const $ = cheerio.load(firstInstanceRawHTML);
 
     const errorMessageRawHTML = $('td#mensagemRetorno').text().trim();
@@ -131,15 +145,6 @@ export class LawsuitService {
         primeiraInstancia.push(movimentacao);
       });
 
-    const secondInstanceLawsuitCodes = await this.extractLawsuitCodes(
-      secondInstanceRawHTMLCodes,
-    );
-
-    const segundaInstancia = await this.secondInstanceParse(
-      secondInstanceLawsuitCodes,
-      `${urls.showSecondInstanceUrl}?processo.codigo`,
-    );
-
     return {
       classe,
       area,
@@ -180,48 +185,60 @@ export class LawsuitService {
     lawsuitCodes: Array<string>,
     url: string,
   ): Promise<Array<LawsuitMovesDTO>> {
-    const movimentacoes: Array<LawsuitMovesDTO> = [];
     const trimRegex = /[\n\t]/g;
-    const spaceRegex = new RegExp(/[\u202F\u00A0]/g);
+    const spaceRegex = /[\u202F\u00A0]/g;
 
-    for (const item of lawsuitCodes) {
-      const rawHTML = await gatewayRequest(`${url}=${item}`);
-      const $ = cheerio.load(rawHTML);
+    const promises: Array<Promise<Array<LawsuitMovesDTO>>> = lawsuitCodes.map(
+      async (item) => {
+        const rawHTML = await gatewayRequest(`${url}=${item}`);
+        const $ = cheerio.load(rawHTML);
 
-      $('tbody#tabelaTodasMovimentacoes')
-        .children()
-        .each(function () {
-          const data = $(this)
-            .children('td.dataMovimentacaoProcesso')
-            .text()
-            .replaceAll(trimRegex, ' ')
-            .replaceAll(spaceRegex, ' ')
-            .trim();
+        const movimentacoes: Array<LawsuitMovesDTO> = [];
 
-          const detalhes = $(this)
-            .children('td.descricaoMovimentacaoProcesso')
-            .contents()
-            .closest('span')
-            .text()
-            .replaceAll(trimRegex, ' ')
-            .replaceAll(spaceRegex, ' ')
-            .trim();
+        $('tbody#tabelaTodasMovimentacoes')
+          .children()
+          .each(function () {
+            const data = $(this)
+              .children('td.dataMovimentacaoProcesso')
+              .text()
+              .replaceAll(trimRegex, ' ')
+              .replaceAll(spaceRegex, ' ')
+              .trim();
 
-          const descricao = $(this)
-            .children('td.descricaoMovimentacaoProcesso')
-            .text()
-            .replaceAll(trimRegex, ' ')
-            .replaceAll(spaceRegex, ' ')
-            .replace(detalhes, '')
-            .trim();
+            const detalhes = $(this)
+              .children('td.descricaoMovimentacaoProcesso')
+              .contents()
+              .closest('span')
+              .text()
+              .replaceAll(trimRegex, ' ')
+              .replaceAll(spaceRegex, ' ')
+              .trim();
 
-          const response = detalhes
-            ? { data, descricao, detalhes }
-            : { data, descricao };
+            const descricao = $(this)
+              .children('td.descricaoMovimentacaoProcesso')
+              .text()
+              .replaceAll(trimRegex, ' ')
+              .replaceAll(spaceRegex, ' ')
+              .replace(detalhes, '')
+              .trim();
 
-          movimentacoes.push(response);
-        });
-    }
+            const response = detalhes
+              ? { data, descricao, detalhes }
+              : { data, descricao };
+
+            movimentacoes.push(response);
+          });
+
+        return movimentacoes;
+      },
+    );
+
+    const resultArrays = await Promise.all(promises);
+
+    const movimentacoes: Array<LawsuitMovesDTO> = resultArrays.reduce(
+      (acc, current) => [...acc, ...current],
+      [],
+    );
 
     return movimentacoes;
   }
